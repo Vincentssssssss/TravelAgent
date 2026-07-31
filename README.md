@@ -14,7 +14,7 @@
 ## 快速开始
 
 建议 Node.js 版本：`22.x` 或 `24.x`。  
-当前 PDF 文档解析在 Node 26 上可能出现兼容性问题。
+当前版本已为 PDF 增加双引擎解析（`pdf-parse` + `pdfjs-dist` 回退），用于提升不同 Node 版本下的兼容性。
 
 ```bash
 npm install

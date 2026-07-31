@@ -22,6 +22,7 @@ function uploadErrorStatus(message: string): number {
     lower.includes("ppt format is not supported") ||
     lower.includes("requires node") ||
     lower.includes("supports node") ||
+    lower.includes("pdf parsing failed") ||
     lower.includes("no extractable text found")
   ) {
     return 400;

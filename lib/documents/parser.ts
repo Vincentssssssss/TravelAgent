@@ -1,4 +1,5 @@
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import mammoth from "mammoth";
 import JSZip from "jszip";
 
@@ -29,16 +30,19 @@ function assertPdfNodeVersion(): void {
       `PDF parsing requires Node >= 20.16. Current runtime is ${process.versions.node}. Please upgrade Node or upload DOCX/PPTX.`
     );
   }
-
-  if (major > 24) {
-    throw new Error(
-      `PDF parsing currently supports Node 20/22/23/24 in this build. Current runtime is ${process.versions.node}. Please use Node 22 or 24, or upload DOCX/PPTX instead of PDF.`
-    );
-  }
 }
 
-async function parsePdf(buffer: Buffer): Promise<string> {
-  assertPdfNodeVersion();
+function isPdfParseImportError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("object.defineproperty called on non-object") ||
+    lower.includes("setting up fake worker failed") ||
+    lower.includes("cannot find module") ||
+    lower.includes("pdf.worker")
+  );
+}
+
+async function parsePdfWithPdfParse(buffer: Buffer): Promise<string> {
   const pdfParseModule = (await import("pdf-parse")) as {
     PDFParse: {
       new (params: { data: Buffer }): {
@@ -65,6 +69,83 @@ async function parsePdf(buffer: Buffer): Promise<string> {
   const parsed = await parser.getText();
   await parser.destroy();
   return normalizeWhitespace(parsed.text ?? "");
+}
+
+async function parsePdfWithPdfJs(buffer: Buffer): Promise<string> {
+  const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as {
+    getDocument: (params: Record<string, unknown>) => {
+      promise: Promise<{
+        numPages: number;
+        getPage: (pageNumber: number) => Promise<{
+          getTextContent: () => Promise<{
+            items: Array<{ str?: string }>;
+          }>;
+        }>;
+        cleanup?: () => Promise<unknown>;
+      }>;
+      destroy: () => Promise<void>;
+    };
+    GlobalWorkerOptions: {
+      workerSrc: string;
+    };
+  };
+
+  const workerPath = path.join(
+    process.cwd(),
+    "node_modules",
+    "pdfjs-dist",
+    "legacy",
+    "build",
+    "pdf.worker.mjs"
+  );
+  pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
+
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    useWorkerFetch: false
+  });
+  const doc = await loadingTask.promise;
+
+  const pages: string[] = [];
+  for (let i = 1; i <= doc.numPages; i += 1) {
+    const page = await doc.getPage(i);
+    const textContent = await page.getTextContent();
+    const line = textContent.items
+      .map((item) => item.str ?? "")
+      .join(" ")
+      .trim();
+    if (line.length > 0) {
+      pages.push(line);
+    }
+  }
+
+  if (typeof doc.cleanup === "function") {
+    await doc.cleanup().catch(() => undefined);
+  }
+  await loadingTask.destroy();
+  return normalizeWhitespace(pages.join("\n"));
+}
+
+async function parsePdf(buffer: Buffer): Promise<string> {
+  assertPdfNodeVersion();
+  try {
+    return await parsePdfWithPdfParse(buffer);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!isPdfParseImportError(message)) {
+      throw error;
+    }
+
+    try {
+      return await parsePdfWithPdfJs(buffer);
+    } catch (fallbackError) {
+      const fallbackMessage =
+        fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+      throw new Error(
+        `PDF parsing failed in both engines. Primary: ${message}; Fallback: ${fallbackMessage}`
+      );
+    }
+  }
 }
 
 async function parseDocx(buffer: Buffer): Promise<string> {
