@@ -1,3 +1,4 @@
+import path from "node:path";
 import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import JSZip from "jszip";
@@ -16,6 +17,17 @@ function normalizeWhitespace(input: string): string {
 }
 
 async function parsePdf(buffer: Buffer): Promise<string> {
+  const workerPath = path.join(
+    process.cwd(),
+    "node_modules",
+    "pdf-parse",
+    "dist",
+    "pdf-parse",
+    "esm",
+    "pdf.worker.mjs"
+  );
+  PDFParse.setWorker(workerPath);
+
   const parser = new PDFParse({ data: buffer });
   const parsed = await parser.getText();
   await parser.destroy();
