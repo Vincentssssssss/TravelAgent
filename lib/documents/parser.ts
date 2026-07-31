@@ -1,5 +1,8 @@
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import os from "node:os";
+import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
+import { promises as fs } from "node:fs";
 import mammoth from "mammoth";
 import JSZip from "jszip";
 
@@ -32,119 +35,75 @@ function assertPdfNodeVersion(): void {
   }
 }
 
-function isPdfParseImportError(message: string): boolean {
-  const lower = message.toLowerCase();
-  return (
-    lower.includes("object.defineproperty called on non-object") ||
-    lower.includes("setting up fake worker failed") ||
-    lower.includes("cannot find module") ||
-    lower.includes("pdf.worker")
-  );
+interface PdfExtractResult {
+  ok: boolean;
+  text?: string;
+  error?: string;
+  primaryError?: string;
+  fallbackError?: string;
 }
 
-async function parsePdfWithPdfParse(buffer: Buffer): Promise<string> {
-  const pdfParseModule = (await import("pdf-parse")) as {
-    PDFParse: {
-      new (params: { data: Buffer }): {
-        getText: () => Promise<{ text?: string }>;
-        destroy: () => Promise<void>;
-      };
-      setWorker: (workerPath: string) => void;
-    };
-  };
-  const PDFParse = pdfParseModule.PDFParse;
+async function runPdfExtractProcess(filePath: string): Promise<PdfExtractResult> {
+  const scriptPath = path.join(process.cwd(), "scripts", "pdf-extract.mjs");
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [scriptPath, filePath], {
+      cwd: process.cwd(),
+      stdio: ["ignore", "pipe", "pipe"]
+    });
 
-  const workerPath = path.join(
-    process.cwd(),
-    "node_modules",
-    "pdf-parse",
-    "dist",
-    "pdf-parse",
-    "esm",
-    "pdf.worker.mjs"
-  );
-  PDFParse.setWorker(workerPath);
+    let stdout = "";
+    let stderr = "";
 
-  const parser = new PDFParse({ data: buffer });
-  const parsed = await parser.getText();
-  await parser.destroy();
-  return normalizeWhitespace(parsed.text ?? "");
-}
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", (error) => reject(error));
+    child.on("close", (code) => {
+      const trimmed = stdout.trim();
+      if (!trimmed) {
+        if (code === 0) {
+          resolve({ ok: false, error: "PDF extractor returned empty output." });
+          return;
+        }
+        resolve({
+          ok: false,
+          error: `PDF extractor exited with code ${code ?? -1}. ${stderr || "No stderr."}`
+        });
+        return;
+      }
 
-async function parsePdfWithPdfJs(buffer: Buffer): Promise<string> {
-  const pdfjs = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as unknown as {
-    getDocument: (params: Record<string, unknown>) => {
-      promise: Promise<{
-        numPages: number;
-        getPage: (pageNumber: number) => Promise<{
-          getTextContent: () => Promise<{
-            items: Array<{ str?: string }>;
-          }>;
-        }>;
-        cleanup?: () => Promise<unknown>;
-      }>;
-      destroy: () => Promise<void>;
-    };
-    GlobalWorkerOptions: {
-      workerSrc: string;
-    };
-  };
-
-  const workerPath = path.join(
-    process.cwd(),
-    "node_modules",
-    "pdfjs-dist",
-    "legacy",
-    "build",
-    "pdf.worker.mjs"
-  );
-  pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
-
-  const loadingTask = pdfjs.getDocument({
-    data: new Uint8Array(buffer),
-    useWorkerFetch: false
+      try {
+        const parsed = JSON.parse(trimmed) as PdfExtractResult;
+        resolve(parsed);
+      } catch {
+        resolve({
+          ok: false,
+          error: `Failed to parse extractor output. Raw: ${trimmed.slice(0, 300)}`
+        });
+      }
+    });
   });
-  const doc = await loadingTask.promise;
-
-  const pages: string[] = [];
-  for (let i = 1; i <= doc.numPages; i += 1) {
-    const page = await doc.getPage(i);
-    const textContent = await page.getTextContent();
-    const line = textContent.items
-      .map((item) => item.str ?? "")
-      .join(" ")
-      .trim();
-    if (line.length > 0) {
-      pages.push(line);
-    }
-  }
-
-  if (typeof doc.cleanup === "function") {
-    await doc.cleanup().catch(() => undefined);
-  }
-  await loadingTask.destroy();
-  return normalizeWhitespace(pages.join("\n"));
 }
 
 async function parsePdf(buffer: Buffer): Promise<string> {
   assertPdfNodeVersion();
-  try {
-    return await parsePdfWithPdfParse(buffer);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!isPdfParseImportError(message)) {
-      throw error;
-    }
+  const tempPath = path.join(os.tmpdir(), `travel-agent-pdf-${randomUUID()}.pdf`);
+  await fs.writeFile(tempPath, buffer);
 
-    try {
-      return await parsePdfWithPdfJs(buffer);
-    } catch (fallbackError) {
-      const fallbackMessage =
-        fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-      throw new Error(
-        `PDF parsing failed in both engines. Primary: ${message}; Fallback: ${fallbackMessage}`
-      );
+  try {
+    const result = await runPdfExtractProcess(tempPath);
+    if (!result.ok) {
+      throw new Error(result.error ?? "PDF extraction failed.");
     }
+    if (!result.text?.trim()) {
+      throw new Error("PDF extraction returned empty text.");
+    }
+    return normalizeWhitespace(result.text);
+  } finally {
+    await fs.unlink(tempPath).catch(() => undefined);
   }
 }
 

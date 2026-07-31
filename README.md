@@ -14,7 +14,7 @@
 ## 快速开始
 
 建议 Node.js 版本：`22.x` 或 `24.x`。  
-当前版本已为 PDF 增加双引擎解析（`pdf-parse` + `pdfjs-dist` 回退），用于提升不同 Node 版本下的兼容性。
+当前版本已为 PDF 增加双引擎解析（`pdf-parse` + `pdfjs-dist` 回退）并通过独立子进程执行，用于提升不同 Node 版本下的兼容性。
 
 ```bash
 npm install
