@@ -1,4 +1,4 @@
-import pdf from "pdf-parse";
+import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import JSZip from "jszip";
 
@@ -16,7 +16,9 @@ function normalizeWhitespace(input: string): string {
 }
 
 async function parsePdf(buffer: Buffer): Promise<string> {
-  const parsed = await pdf(buffer);
+  const parser = new PDFParse({ data: buffer });
+  const parsed = await parser.getText();
+  await parser.destroy();
   return normalizeWhitespace(parsed.text ?? "");
 }
 
