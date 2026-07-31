@@ -14,7 +14,23 @@ function sanitizeFileName(fileName: string): string {
   return fileName.replaceAll(/[^a-zA-Z0-9._-]/g, "_");
 }
 
+function uploadErrorStatus(message: string): number {
+  const lower = message.toLowerCase();
+  if (
+    lower.includes("unsupported file type") ||
+    lower.includes("doc format is not supported") ||
+    lower.includes("ppt format is not supported") ||
+    lower.includes("requires node") ||
+    lower.includes("supports node") ||
+    lower.includes("no extractable text found")
+  ) {
+    return 400;
+  }
+  return 500;
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
+  let storagePath: string | null = null;
   try {
     const ocrEnabled = process.env.ENABLE_OCR === "true";
     const auth = request.headers.get("x-admin-key");
@@ -34,7 +50,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const targetDir = path.join(process.cwd(), "data", "uploads");
     await fs.mkdir(targetDir, { recursive: true });
     const storageName = `${Date.now()}-${safeFileName}`;
-    const storagePath = path.join(targetDir, storageName);
+    storagePath = path.join(targetDir, storageName);
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -89,9 +105,17 @@ export async function POST(request: Request): Promise<NextResponse> {
         : "OCR is disabled; image-only content is not indexed in this version."
     });
   } catch (error) {
+    if (storagePath) {
+      try {
+        await fs.unlink(storagePath);
+      } catch {
+        // Ignore cleanup failure.
+      }
+    }
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+      { error: message },
+      { status: uploadErrorStatus(message) }
     );
   }
 }

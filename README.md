@@ -26,7 +26,9 @@ cp .env.example .env
 ```env
 QWEN_API_BASE_URL=https://llm-sx2qy7imh5bxbc2o.cn-beijing.maas.aliyuncs.com/compatible-mode/v1
 QWEN_MODEL=qwen-plus
+LLM_MODE=auto
 QWEN_EMBEDDING_MODEL=text-embedding-v3
+EMBEDDING_MODE=auto
 QWEN_API_KEY=your_real_key
 ADMIN_KEY=your_admin_key
 ENABLE_OCR=false
@@ -63,7 +65,7 @@ npm run test
 
 1. 先进行规则分类与知识检索
 2. 无可靠命中：直接返回“知识库暂无可确认信息”并给人工支持建议
-3. 有命中：将命中片段发送给 Qwen 生成结构化回答
+3. 有命中：优先调用 Qwen 生成结构化回答；若 `LLM_MODE=auto` 且网络不可达，则自动切本地兜底回答
 4. 输出格式固定为：结论 -> 说明 -> 下一步建议（附来源）
 
 ## 文档上传与向量索引
@@ -81,6 +83,9 @@ npm run test
   - 单文档重建索引
   - 全量重建索引
 - 上传支持进度显示与自动重试（最多 3 次）
+- 本地离线预览建议：
+  - `LLM_MODE=auto`（默认）可在模型不可达时本地兜底
+  - `EMBEDDING_MODE=auto`（默认）可在 embedding 不可达时本地兜底
 - 聊天检索会同时使用：
   - 结构化知识库 (`data/knowledge.json`)
   - 文档向量索引 (`data/vector-index.json`)
