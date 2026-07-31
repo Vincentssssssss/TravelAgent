@@ -1,4 +1,11 @@
-import type { ChatResponse, KnowledgeEntry, Language } from "@/types/knowledge";
+import type { ChatResponse, Language } from "@/types/knowledge";
+
+export interface GroundedSnippet {
+  title: string;
+  content: string;
+  source: string;
+  type: string;
+}
 
 interface ModelMessage {
   role: "system" | "user";
@@ -13,17 +20,15 @@ interface QwenChatCompletion {
   }>;
 }
 
-function toKnowledgeBlock(matches: KnowledgeEntry[], lang: Language): string {
-  return matches
-    .map((entry) => {
-      const title = lang === "zh" ? entry.title_zh : entry.title_en;
-      const content = lang === "zh" ? entry.content_zh : entry.content_en;
-      return `- [${entry.type}] ${title}\n  ${content}\n  source: ${entry.source}`;
+function toKnowledgeBlock(snippets: GroundedSnippet[]): string {
+  return snippets
+    .map((snippet) => {
+      return `- [${snippet.type}] ${snippet.title}\n  ${snippet.content}\n  source: ${snippet.source}`;
     })
     .join("\n");
 }
 
-function buildPrompt(query: string, matches: KnowledgeEntry[], lang: Language): ModelMessage[] {
+function buildPrompt(query: string, snippets: GroundedSnippet[], lang: Language): ModelMessage[] {
   const system =
     lang === "zh"
       ? "你是公司内部差旅助手。必须只基于提供的知识库内容回答，不得补充未给出的事实。输出必须是严格JSON：{conclusion,details,nextSteps,sources}。sources为字符串数组。"
@@ -35,7 +40,7 @@ function buildPrompt(query: string, matches: KnowledgeEntry[], lang: Language): 
     "\n\n" +
     (lang === "zh" ? "可用知识：" : "Knowledge snippets:") +
     "\n" +
-    toKnowledgeBlock(matches, lang);
+    toKnowledgeBlock(snippets);
 
   return [
     { role: "system", content: system },
@@ -45,7 +50,7 @@ function buildPrompt(query: string, matches: KnowledgeEntry[], lang: Language): 
 
 export async function generateGroundedAnswer(
   query: string,
-  matches: KnowledgeEntry[],
+  snippets: GroundedSnippet[],
   category: ChatResponse["category"],
   lang: Language
 ): Promise<ChatResponse> {
@@ -65,7 +70,7 @@ export async function generateGroundedAnswer(
     },
     body: JSON.stringify({
       model,
-      messages: buildPrompt(query, matches, lang),
+      messages: buildPrompt(query, snippets, lang),
       temperature: 0.1
     })
   });
@@ -88,6 +93,6 @@ export async function generateGroundedAnswer(
     conclusion: parsed.conclusion,
     details: parsed.details,
     nextSteps: parsed.nextSteps,
-    sources: parsed.sources ?? matches.map((entry) => entry.source)
+    sources: parsed.sources ?? snippets.map((snippet) => snippet.source)
   };
 }

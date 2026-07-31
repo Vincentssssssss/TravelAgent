@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { KnowledgeEntry, KnowledgeType, Language } from "@/types/knowledge";
 import { labelForType } from "@/lib/i18n";
+import type { IndexedDocumentMeta } from "@/types/documents";
 
 const defaultEntry: KnowledgeEntry = {
   id: "",
@@ -35,6 +36,8 @@ export function AdminPanel({ adminKey, language }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [documents, setDocuments] = useState<IndexedDocumentMeta[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   const typeOptions: KnowledgeType[] = useMemo(
     () => ["policy", "hotel", "process", "contact", "visa", "faq"],
@@ -57,8 +60,24 @@ export function AdminPanel({ adminKey, language }: Props) {
     setLoading(false);
   }
 
+  async function loadDocuments() {
+    const response = await fetch("/api/admin/documents", {
+      headers: { "x-admin-key": adminKey }
+    });
+    const payload = (await response.json()) as {
+      documents?: IndexedDocumentMeta[];
+      error?: string;
+    };
+    if (!response.ok) {
+      setMessage(payload.error ?? "Failed to load documents");
+      return;
+    }
+    setDocuments(payload.documents ?? []);
+  }
+
   useEffect(() => {
     void loadEntries();
+    void loadDocuments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -115,6 +134,41 @@ export function AdminPanel({ adminKey, language }: Props) {
   function onCancelEdit() {
     setEditingId(null);
     setForm(defaultEntry);
+  }
+
+  async function onUploadDocument(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const fileInput = form.querySelector<HTMLInputElement>("input[name='document']");
+    const file = fileInput?.files?.[0];
+    if (!file) {
+      setMessage(language === "zh" ? "请先选择文件" : "Please select a file first");
+      return;
+    }
+
+    const payload = new FormData();
+    payload.append("file", file);
+    setUploading(true);
+    const response = await fetch("/api/admin/documents/upload", {
+      method: "POST",
+      headers: { "x-admin-key": adminKey },
+      body: payload
+    });
+
+    const result = (await response.json()) as { error?: string; chunkCount?: number };
+    setUploading(false);
+    if (!response.ok) {
+      setMessage(result.error ?? "Upload failed");
+      return;
+    }
+
+    setMessage(
+      language === "zh"
+        ? `上传并索引完成，分块数：${result.chunkCount ?? 0}`
+        : `Upload and indexing completed, chunks: ${result.chunkCount ?? 0}`
+    );
+    form.reset();
+    await loadDocuments();
   }
 
   return (
@@ -231,6 +285,38 @@ export function AdminPanel({ adminKey, language }: Props) {
       </form>
 
       {message ? <p className="muted block">{message}</p> : null}
+
+      <section className="card block">
+        <h3>{language === "zh" ? "文档上传与向量索引" : "Document Upload & Vector Indexing"}</h3>
+        <p className="muted">
+          {language === "zh"
+            ? "支持 PDF / DOCX / PPTX（本期不做图片OCR）。上传后自动抽取文本并建立向量索引。"
+            : "Supports PDF / DOCX / PPTX (no image OCR in this release). Text is extracted and embedded automatically."}
+        </p>
+        <form className="row block" onSubmit={onUploadDocument}>
+          <input className="input" name="document" type="file" accept=".pdf,.docx,.pptx,.doc,.ppt" />
+          <button className="button" type="submit" disabled={uploading}>
+            {uploading ? "..." : language === "zh" ? "上传并索引" : "Upload & Index"}
+          </button>
+        </form>
+        <div className="block">
+          {documents.length === 0 ? (
+            <p className="muted">
+              {language === "zh" ? "当前未上传文档" : "No uploaded documents yet"}
+            </p>
+          ) : (
+            documents.map((doc) => (
+              <div className="card block" key={doc.documentId}>
+                <strong>{doc.fileName}</strong>
+                <p className="muted">
+                  {language === "zh" ? "分块数" : "Chunks"}: {doc.chunkCount} ·{" "}
+                  {language === "zh" ? "上传时间" : "Uploaded at"}: {doc.uploadedAt}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
 
       <div className="block">
         {loading ? (
