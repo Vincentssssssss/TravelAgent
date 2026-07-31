@@ -1,5 +1,4 @@
 import path from "node:path";
-import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import JSZip from "jszip";
 
@@ -16,7 +15,41 @@ function normalizeWhitespace(input: string): string {
   return input.replaceAll(/\s+/g, " ").trim();
 }
 
+function assertPdfNodeVersion(): void {
+  const [majorRaw, minorRaw] = process.versions.node.split(".");
+  const major = Number(majorRaw);
+  const minor = Number(minorRaw);
+
+  if (Number.isNaN(major) || Number.isNaN(minor)) {
+    return;
+  }
+
+  if (major < 20 || (major === 20 && minor < 16)) {
+    throw new Error(
+      `PDF parsing requires Node >= 20.16. Current runtime is ${process.versions.node}. Please upgrade Node or upload DOCX/PPTX.`
+    );
+  }
+
+  if (major > 24) {
+    throw new Error(
+      `PDF parsing currently supports Node 20/22/23/24 in this build. Current runtime is ${process.versions.node}. Please use Node 22 or 24, or upload DOCX/PPTX instead of PDF.`
+    );
+  }
+}
+
 async function parsePdf(buffer: Buffer): Promise<string> {
+  assertPdfNodeVersion();
+  const pdfParseModule = (await import("pdf-parse")) as {
+    PDFParse: {
+      new (params: { data: Buffer }): {
+        getText: () => Promise<{ text?: string }>;
+        destroy: () => Promise<void>;
+      };
+      setWorker: (workerPath: string) => void;
+    };
+  };
+  const PDFParse = pdfParseModule.PDFParse;
+
   const workerPath = path.join(
     process.cwd(),
     "node_modules",

@@ -13,6 +13,9 @@
 
 ## 快速开始
 
+建议 Node.js 版本：`22.x` 或 `24.x`。  
+当前 PDF 文档解析在 Node 26 上可能出现兼容性问题。
+
 ```bash
 npm install
 cp .env.example .env

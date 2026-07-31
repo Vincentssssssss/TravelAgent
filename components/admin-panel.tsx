@@ -174,7 +174,16 @@ export function AdminPanel({ adminKey, language }: Props) {
           resolve(payload);
           return;
         }
-        reject(new Error(payload.error ?? "Upload failed"));
+        const rawSnippet =
+          typeof xhr.responseText === "string" ? xhr.responseText.slice(0, 240) : "";
+        reject(
+          new Error(
+            payload.error ??
+              `Upload failed (HTTP ${xhr.status}). ${
+                rawSnippet ? `Response: ${rawSnippet}` : "No response body."
+              }`
+          )
+        );
       };
 
       const payload = new FormData();
