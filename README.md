@@ -26,6 +26,7 @@ QWEN_MODEL=qwen-plus
 QWEN_EMBEDDING_MODEL=text-embedding-v3
 QWEN_API_KEY=your_real_key
 ADMIN_KEY=your_admin_key
+ENABLE_OCR=false
 ```
 
 启动开发环境：
@@ -66,12 +67,17 @@ npm run test
 
 - 管理员页面新增文档上传入口（`/admin?key=...`）
 - 支持格式：`PDF`, `DOCX`, `PPTX`
-- 当前版本不做图片 OCR，仅抽取文档可读文本层
+- 当前版本默认不做图片 OCR，仅抽取文档可读文本层（可通过 `ENABLE_OCR` 开关预留）
 - 每次上传后会自动：
   1. 保存原文件到 `data/uploads/`
   2. 文本切分为 chunks
   3. 调用阿里云 embedding（`QWEN_EMBEDDING_MODEL`）生成向量
   4. 写入 `data/vector-index.json`
+- 管理员可在页面执行：
+  - 单文档删除（同时删除索引）
+  - 单文档重建索引
+  - 全量重建索引
+- 上传支持进度显示与自动重试（最多 3 次）
 - 聊天检索会同时使用：
   - 结构化知识库 (`data/knowledge.json`)
   - 文档向量索引 (`data/vector-index.json`)

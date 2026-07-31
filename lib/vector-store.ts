@@ -44,6 +44,20 @@ export async function upsertDocumentChunks(
   });
 }
 
+export async function removeDocumentChunks(documentId: string): Promise<IndexedDocumentMeta | null> {
+  const index = await readVectorIndex();
+  const document = index.documents.find((item) => item.documentId === documentId) ?? null;
+  if (!document) {
+    return null;
+  }
+
+  await writeVectorIndex({
+    documents: index.documents.filter((item) => item.documentId !== documentId),
+    chunks: index.chunks.filter((item) => item.documentId !== documentId)
+  });
+  return document;
+}
+
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length || a.length === 0) return -1;
 

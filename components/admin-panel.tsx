@@ -38,6 +38,9 @@ export function AdminPanel({ adminKey, language }: Props) {
   const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState<IndexedDocumentMeta[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const [reindexing, setReindexing] = useState(false);
 
   const typeOptions: KnowledgeType[] = useMemo(
     () => ["policy", "hotel", "process", "contact", "visa", "faq"],
@@ -136,6 +139,123 @@ export function AdminPanel({ adminKey, language }: Props) {
     setForm(defaultEntry);
   }
 
+  function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  }
+
+  function uploadOnce(file: File): Promise<{ chunkCount?: number; note?: string }> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/admin/documents/upload");
+      xhr.setRequestHeader("x-admin-key", adminKey);
+
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        const progress = Math.round((event.loaded / event.total) * 100);
+        setUploadProgress(progress);
+      };
+
+      xhr.onerror = () => reject(new Error("Network error"));
+      xhr.onload = () => {
+        let payload: { error?: string; chunkCount?: number; note?: string } = {};
+        try {
+          payload = JSON.parse(xhr.responseText) as {
+            error?: string;
+            chunkCount?: number;
+            note?: string;
+          };
+        } catch {
+          payload = {};
+        }
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(payload);
+          return;
+        }
+        reject(new Error(payload.error ?? "Upload failed"));
+      };
+
+      const payload = new FormData();
+      payload.append("file", file);
+      xhr.send(payload);
+    });
+  }
+
+  async function onReindexAll() {
+    setReindexing(true);
+    const response = await fetch("/api/admin/documents", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": adminKey
+      },
+      body: JSON.stringify({})
+    });
+    setReindexing(false);
+    const payload = (await response.json()) as {
+      error?: string;
+      reindexedDocuments?: number;
+      totalChunks?: number;
+    };
+    if (!response.ok) {
+      setMessage(payload.error ?? "Reindex failed");
+      return;
+    }
+    setMessage(
+      language === "zh"
+        ? `重建完成，文档数：${payload.reindexedDocuments ?? 0}，分块数：${payload.totalChunks ?? 0}`
+        : `Reindex completed. Documents: ${payload.reindexedDocuments ?? 0}, chunks: ${payload.totalChunks ?? 0}`
+    );
+    await loadDocuments();
+  }
+
+  async function onReindexDocument(documentId: string) {
+    setReindexing(true);
+    const response = await fetch("/api/admin/documents", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-key": adminKey
+      },
+      body: JSON.stringify({ documentId })
+    });
+    setReindexing(false);
+    const payload = (await response.json()) as {
+      error?: string;
+      reindexedDocuments?: number;
+      totalChunks?: number;
+    };
+    if (!response.ok) {
+      setMessage(payload.error ?? "Reindex failed");
+      return;
+    }
+    setMessage(
+      language === "zh"
+        ? `单文档重建完成，分块数：${payload.totalChunks ?? 0}`
+        : `Document reindex completed, chunks: ${payload.totalChunks ?? 0}`
+    );
+    await loadDocuments();
+  }
+
+  async function onDeleteDocument(documentId: string) {
+    const response = await fetch(
+      `/api/admin/documents?documentId=${encodeURIComponent(documentId)}`,
+      {
+        method: "DELETE",
+        headers: { "x-admin-key": adminKey }
+      }
+    );
+    const payload = (await response.json()) as { error?: string };
+    if (!response.ok) {
+      setMessage(payload.error ?? "Delete failed");
+      return;
+    }
+    setMessage(language === "zh" ? "文档已删除" : "Document deleted");
+    await loadDocuments();
+  }
+
   async function onUploadDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -146,27 +266,39 @@ export function AdminPanel({ adminKey, language }: Props) {
       return;
     }
 
-    const payload = new FormData();
-    payload.append("file", file);
     setUploading(true);
-    const response = await fetch("/api/admin/documents/upload", {
-      method: "POST",
-      headers: { "x-admin-key": adminKey },
-      body: payload
-    });
+    setUploadProgress(0);
+    setRetryAttempt(0);
+    let result: { chunkCount?: number; note?: string } | null = null;
 
-    const result = (await response.json()) as { error?: string; chunkCount?: number };
-    setUploading(false);
-    if (!response.ok) {
-      setMessage(result.error ?? "Upload failed");
-      return;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        setRetryAttempt(attempt);
+        result = await uploadOnce(file);
+        break;
+      } catch (error) {
+        if (attempt === 3) {
+          setUploading(false);
+          setMessage(
+            error instanceof Error
+              ? error.message
+              : language === "zh"
+              ? "上传失败"
+              : "Upload failed"
+          );
+          return;
+        }
+        await sleep(500 * attempt);
+      }
     }
+    setUploading(false);
 
     setMessage(
       language === "zh"
-        ? `上传并索引完成，分块数：${result.chunkCount ?? 0}`
-        : `Upload and indexing completed, chunks: ${result.chunkCount ?? 0}`
+        ? `上传并索引完成，分块数：${result?.chunkCount ?? 0}${result?.note ? `。${result.note}` : ""}`
+        : `Upload and indexing completed, chunks: ${result?.chunkCount ?? 0}${result?.note ? `. ${result.note}` : ""}`
     );
+    setUploadProgress(100);
     form.reset();
     await loadDocuments();
   }
@@ -293,12 +425,24 @@ export function AdminPanel({ adminKey, language }: Props) {
             ? "支持 PDF / DOCX / PPTX（本期不做图片OCR）。上传后自动抽取文本并建立向量索引。"
             : "Supports PDF / DOCX / PPTX (no image OCR in this release). Text is extracted and embedded automatically."}
         </p>
+        <div className="row block">
+          <button className="button secondary" type="button" onClick={() => void onReindexAll()} disabled={reindexing}>
+            {reindexing ? "..." : language === "zh" ? "全量重建索引" : "Reindex All"}
+          </button>
+        </div>
         <form className="row block" onSubmit={onUploadDocument}>
           <input className="input" name="document" type="file" accept=".pdf,.docx,.pptx,.doc,.ppt" />
           <button className="button" type="submit" disabled={uploading}>
             {uploading ? "..." : language === "zh" ? "上传并索引" : "Upload & Index"}
           </button>
         </form>
+        {uploading ? (
+          <p className="muted">
+            {language === "zh"
+              ? `上传进度 ${uploadProgress}%（第 ${retryAttempt} 次尝试）`
+              : `Upload progress ${uploadProgress}% (attempt ${retryAttempt})`}
+          </p>
+        ) : null}
         <div className="block">
           {documents.length === 0 ? (
             <p className="muted">
@@ -307,7 +451,26 @@ export function AdminPanel({ adminKey, language }: Props) {
           ) : (
             documents.map((doc) => (
               <div className="card block" key={doc.documentId}>
-                <strong>{doc.fileName}</strong>
+                <div className="row" style={{ justifyContent: "space-between" }}>
+                  <strong>{doc.fileName}</strong>
+                  <div className="row">
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={() => void onReindexDocument(doc.documentId)}
+                      disabled={reindexing}
+                    >
+                      {language === "zh" ? "重建索引" : "Reindex"}
+                    </button>
+                    <button
+                      type="button"
+                      className="button secondary"
+                      onClick={() => void onDeleteDocument(doc.documentId)}
+                    >
+                      {language === "zh" ? "删除文档" : "Delete"}
+                    </button>
+                  </div>
+                </div>
                 <p className="muted">
                   {language === "zh" ? "分块数" : "Chunks"}: {doc.chunkCount} ·{" "}
                   {language === "zh" ? "上传时间" : "Uploaded at"}: {doc.uploadedAt}

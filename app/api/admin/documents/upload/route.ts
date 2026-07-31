@@ -16,6 +16,7 @@ function sanitizeFileName(fileName: string): string {
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
+    const ocrEnabled = process.env.ENABLE_OCR === "true";
     const auth = request.headers.get("x-admin-key");
     if (!isAdminAuthorizedByKey(auth, process.env.ADMIN_KEY)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -44,7 +45,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (chunks.length === 0) {
       return NextResponse.json(
         {
-          error: "No extractable text found in this document."
+          error: ocrEnabled
+            ? "No extractable text found in this document."
+            : "No extractable text found in this document. OCR is disabled in current environment."
         },
         { status: 400 }
       );
@@ -79,7 +82,11 @@ export async function POST(request: Request): Promise<NextResponse> {
       ok: true,
       documentId,
       fileName: file.name,
-      chunkCount: embeddedChunks.length
+      chunkCount: embeddedChunks.length,
+      ocrEnabled,
+      note: ocrEnabled
+        ? "OCR flag is enabled, but current version only indexes text layer."
+        : "OCR is disabled; image-only content is not indexed in this version."
     });
   } catch (error) {
     return NextResponse.json(
