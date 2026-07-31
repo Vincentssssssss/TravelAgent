@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { spawn } from "node:child_process";
 
 function normalizeWhitespace(input) {
   return input.replace(/\s+/g, " ").trim();
@@ -82,6 +83,44 @@ async function parseWithPdfJs(buffer) {
   return normalizeWhitespace(pages.join("\n"));
 }
 
+function parseWithPdftotext(filePath) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("pdftotext", ["-layout", "-enc", "UTF-8", filePath, "-"], {
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", (error) => {
+      if (error && error.code === "ENOENT") {
+        reject(
+          new Error(
+            "pdftotext command not found. Install poppler (brew install poppler) to enable system PDF fallback."
+          )
+        );
+        return;
+      }
+      reject(error);
+    });
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(
+          new Error(`pdftotext exited with code ${code ?? -1}. ${stderr.trim() || "No stderr."}`)
+        );
+        return;
+      }
+      resolve(normalizeWhitespace(stdout));
+    });
+  });
+}
+
 async function run(filePath) {
   const buffer = await readFile(filePath);
   let primaryError = "";
@@ -99,6 +138,7 @@ async function run(filePath) {
     primaryError = error instanceof Error ? error.message : String(error);
   }
 
+  let fallbackError = "";
   try {
     const text = await parseWithPdfJs(buffer);
     if (text.length > 0) {
@@ -109,20 +149,37 @@ async function run(filePath) {
         primaryError
       };
     }
+  } catch (error) {
+    fallbackError = error instanceof Error ? error.message : String(error);
+  }
+
+  try {
+    const text = await parseWithPdftotext(filePath);
+    if (text.length > 0) {
+      return {
+        ok: true,
+        text,
+        engine: "pdftotext",
+        primaryError,
+        fallbackError
+      };
+    }
     return {
       ok: false,
       error:
         "No extractable text found in this PDF (possibly image-only). OCR is disabled in this version.",
       primaryError,
-      fallbackError: "pdfjs-dist returned empty text"
+      fallbackError,
+      systemFallbackError: "pdftotext returned empty text"
     };
   } catch (error) {
-    const fallbackError = error instanceof Error ? error.message : String(error);
+    const systemFallbackError = error instanceof Error ? error.message : String(error);
     return {
       ok: false,
-      error: `PDF parsing failed in both engines. Primary: ${primaryError}; Fallback: ${fallbackError}`,
+      error: `PDF parsing failed in all engines. Primary: ${primaryError}; Fallback: ${fallbackError}; System fallback: ${systemFallbackError}`,
       primaryError,
-      fallbackError
+      fallbackError,
+      systemFallbackError
     };
   }
 }
