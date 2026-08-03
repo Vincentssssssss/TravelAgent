@@ -31,7 +31,7 @@ async function parseWithPdfParse(buffer) {
     "esm",
     "pdf.worker.mjs"
   );
-  PDFParse.setWorker(workerPath);
+  PDFParse.setWorker(pathToFileURL(workerPath).href);
 
   const parser = new PDFParse({ data: buffer });
   const parsed = await parser.getText();
@@ -102,7 +102,7 @@ function parseWithPdftotext(filePath) {
       if (error && error.code === "ENOENT") {
         reject(
           new Error(
-            "pdftotext command not found. Install poppler (brew install poppler) to enable system PDF fallback."
+            "pdftotext command not found. Install poppler to enable system PDF fallback (Windows: winget install oschwartz10612.poppler or choco install poppler, macOS: brew install poppler)."
           )
         );
         return;
