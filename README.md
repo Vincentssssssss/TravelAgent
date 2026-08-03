@@ -45,6 +45,27 @@ npm run dev
 - 用户端：`http://localhost:3000`
 - 管理端：`http://localhost:3000/admin?key=your_admin_key`
 
+## Windows 一体化部署脚本
+
+仓库提供 PowerShell 一体化脚本（从 clone 到可运行）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap-windows.ps1 `
+  -WorkDir "$HOME\Projects" `
+  -TargetRef "cursor/travel-assistant-mvp-9bc6" `
+  -QwenApiKey "your_real_key" `
+  -AdminKey "123456789" `
+  -InstallPoppler `
+  -StartDev
+```
+
+常用参数：
+- `-LlmMode auto|remote|local`
+- `-EmbeddingMode auto|remote|local`
+- `-RunBuildAndTests`
+- `-InstallPoppler`
+- `-StartDev`
+
 ## 目录说明
 
 - `app/` 页面与 API
