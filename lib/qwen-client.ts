@@ -22,6 +22,13 @@ interface QwenChatCompletion {
 
 type LlmMode = "remote" | "local" | "auto";
 
+interface ParsedModelAnswer {
+  conclusion: string;
+  details: string;
+  nextSteps: string;
+  sources?: string[];
+}
+
 function resolveLlmMode(): LlmMode {
   const raw = (process.env.LLM_MODE ?? "auto").toLowerCase();
   if (raw === "remote" || raw === "local" || raw === "auto") {
@@ -44,6 +51,27 @@ function isNetworkLikeError(errorMessage: string): boolean {
 
 function uniqueSources(snippets: GroundedSnippet[]): string[] {
   return [...new Set(snippets.map((snippet) => snippet.source))];
+}
+
+export function parseModelAnswerJson(rawContent: string): ParsedModelAnswer {
+  const trimmed = rawContent.trim();
+  const unfenced = trimmed
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  try {
+    return JSON.parse(unfenced) as ParsedModelAnswer;
+  } catch {
+    const start = unfenced.indexOf("{");
+    const end = unfenced.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(unfenced.slice(start, end + 1)) as ParsedModelAnswer;
+    }
+  }
+
+  throw new Error("Model output is not valid JSON.");
 }
 
 export function buildLocalGroundedAnswer(
@@ -164,7 +192,7 @@ export async function generateGroundedAnswer(
       throw new Error("Qwen returned empty content.");
     }
 
-    const parsed = JSON.parse(content) as Omit<ChatResponse, "resolved" | "category">;
+    const parsed = parseModelAnswerJson(content) as Omit<ChatResponse, "resolved" | "category">;
     return {
       resolved: true,
       category,
