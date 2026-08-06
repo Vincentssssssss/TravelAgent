@@ -1,0 +1,74 @@
+[
+  {
+    "id": "policy-hotel-standard",
+    "type": "policy",
+    "title_zh": "差旅住宿标准",
+    "title_en": "Travel accommodation standard",
+    "content_zh": "大中华区员工出差应优先选择公司协议酒店。标准城市住宿上限为每晚 1200 人民币（含税），超标需走例外审批。",
+    "content_en": "Employees in Greater China should prioritize contracted hotels. Standard-city accommodation cap is CNY 1200 per night (tax included); exceptions require approval.",
+    "keywords": ["住宿标准", "hotel policy", "1200", "例外审批"],
+    "source": "Travel Policy v2026.06",
+    "updated_at": "2026-07-01",
+    "owner": "Travel Team"
+  },
+  {
+    "id": "hotel-sourcing-process",
+    "type": "process",
+    "title_zh": "酒店 Sourcing 申请流程",
+    "title_en": "Hotel sourcing request process",
+    "content_zh": "在内部差旅系统提交酒店 Sourcing 工单，填写目的地、入住日期、预算与入住天数。Travel Team 在 1 个工作日内反馈方案。",
+    "content_en": "Submit a hotel sourcing ticket in the internal travel system with destination, check-in date, budget, and stay length. Travel Team responds within 1 business day.",
+    "keywords": ["sourcing", "酒店", "流程", "工单", "申请"],
+    "source": "Travel SOP v2026.05",
+    "updated_at": "2026-07-03",
+    "owner": "Travel Team"
+  },
+  {
+    "id": "finance-reimbursement-policy",
+    "type": "policy",
+    "title_zh": "差旅报销政策摘要",
+    "title_en": "Travel reimbursement policy summary",
+    "content_zh": "差旅报销须在出差结束后 30 天内提交，需附电子发票与行程单。超过时限需直属经理审批说明。",
+    "content_en": "Travel reimbursements must be submitted within 30 days after trip completion with e-invoices and itinerary proof. Late submissions require manager approval.",
+    "keywords": ["报销", "发票", "finance policy", "30天"],
+    "source": "Finance Policy v2026.04",
+    "updated_at": "2026-06-20",
+    "owner": "Finance Team"
+  },
+  {
+    "id": "contact-travel-team",
+    "type": "contact",
+    "title_zh": "Travel Team 联系方式",
+    "title_en": "Travel Team contact",
+    "content_zh": "Travel Team 邮箱：travel-support@company.com；办公时间 09:00-18:00（北京时间）。紧急问题请在邮件标题标注 [URGENT]。",
+    "content_en": "Travel Team email: travel-support@company.com; office hours 09:00-18:00 (Beijing time). For urgent issues, add [URGENT] in subject.",
+    "keywords": ["联系人", "travel team", "邮箱", "支持"],
+    "source": "Travel Contact List v2026.07",
+    "updated_at": "2026-07-10",
+    "owner": "Travel Team"
+  },
+  {
+    "id": "visa-support-guide",
+    "type": "visa",
+    "title_zh": "签证支持指引",
+    "title_en": "Visa support guidance",
+    "content_zh": "签证支持申请请至少提前 15 个自然日提交，需提供护照首页、出差邀请函和行程计划。咨询邮箱：visa-support@company.com。",
+    "content_en": "Submit visa support requests at least 15 calendar days in advance with passport front page, invitation letter, and itinerary. Contact: visa-support@company.com.",
+    "keywords": ["签证", "visa", "15天", "邀请函"],
+    "source": "Visa Guide v2026.03",
+    "updated_at": "2026-06-15",
+    "owner": "Visa Support"
+  },
+  {
+    "id": "hotel-contracted-list",
+    "type": "hotel",
+    "title_zh": "上海协议酒店示例",
+    "title_en": "Shanghai contracted hotel examples",
+    "content_zh": "上海协议酒店示例：Hotel A（协议价 850 RMB/晚），Hotel B（协议价 980 RMB/晚）。具体可订状态以预订系统实时信息为准。",
+    "content_en": "Contracted hotels in Shanghai (sample): Hotel A (CNY 850/night), Hotel B (CNY 980/night). Availability depends on real-time booking system status.",
+    "keywords": ["协议酒店", "上海", "价格", "hotel rate"],
+    "source": "Contracted Hotel DB snapshot 2026-07-08",
+    "updated_at": "2026-07-08",
+    "owner": "Travel Procurement"
+  }
+]
