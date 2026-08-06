@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import mammoth from "mammoth";
 import JSZip from "jszip";
+import { read, utils } from "xlsx";
 
 function decodeXmlText(input: string): string {
   return input
@@ -133,6 +134,38 @@ async function parsePptx(buffer: Buffer): Promise<string> {
   return normalizeWhitespace(pieces.join("\n"));
 }
 
+async function parseExcel(buffer: Buffer): Promise<string> {
+  const workbook = read(buffer, { type: "buffer" });
+  const sections: string[] = [];
+
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) continue;
+
+    const rows = utils.sheet_to_json<Array<string | number | boolean | null>>(sheet, {
+      header: 1,
+      raw: false,
+      defval: ""
+    });
+
+    const rowText = rows
+      .map((row) =>
+        row
+          .map((cell) => String(cell ?? "").trim())
+          .filter(Boolean)
+          .join(" | ")
+      )
+      .filter(Boolean)
+      .join("\n");
+
+    if (rowText.length > 0) {
+      sections.push(`Sheet: ${sheetName}\n${rowText}`);
+    }
+  }
+
+  return normalizeWhitespace(sections.join("\n\n"));
+}
+
 export async function extractTextFromDocument(
   fileName: string,
   buffer: Buffer
@@ -148,13 +181,16 @@ export async function extractTextFromDocument(
   if (lower.endsWith(".pptx")) {
     return parsePptx(buffer);
   }
+  if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
+    return parseExcel(buffer);
+  }
   if (lower.endsWith(".doc")) {
     throw new Error("DOC format is not supported yet. Please convert to DOCX.");
   }
   if (lower.endsWith(".ppt")) {
     throw new Error("PPT format is not supported yet. Please convert to PPTX.");
   }
-  throw new Error("Unsupported file type. Please upload PDF, DOCX, or PPTX.");
+  throw new Error("Unsupported file type. Please upload PDF, DOCX, XLSX/XLS, or PPTX.");
 }
 
 export function splitIntoChunks(text: string, chunkSize = 700, overlap = 120): string[] {

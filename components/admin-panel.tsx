@@ -431,8 +431,8 @@ export function AdminPanel({ adminKey, language }: Props) {
         <h3>{language === "zh" ? "文档上传与向量索引" : "Document Upload & Vector Indexing"}</h3>
         <p className="muted">
           {language === "zh"
-            ? "支持 PDF / DOCX / PPTX（本期不做图片OCR）。上传后自动抽取文本并建立向量索引。"
-            : "Supports PDF / DOCX / PPTX (no image OCR in this release). Text is extracted and embedded automatically."}
+            ? "支持 PDF / DOCX / XLSX / XLS / PPTX（本期不做图片OCR）。上传后自动抽取文本并建立向量索引。"
+            : "Supports PDF / DOCX / XLSX / XLS / PPTX (no image OCR in this release). Text is extracted and embedded automatically."}
         </p>
         <div className="row block">
           <button className="button secondary" type="button" onClick={() => void onReindexAll()} disabled={reindexing}>
@@ -440,7 +440,7 @@ export function AdminPanel({ adminKey, language }: Props) {
           </button>
         </div>
         <form className="row block" onSubmit={onUploadDocument}>
-          <input className="input" name="document" type="file" accept=".pdf,.docx,.pptx,.doc,.ppt" />
+          <input className="input" name="document" type="file" accept=".pdf,.docx,.xlsx,.xls,.pptx,.doc,.ppt" />
           <button className="button" type="submit" disabled={uploading}>
             {uploading ? "..." : language === "zh" ? "上传并索引" : "Upload & Index"}
           </button>

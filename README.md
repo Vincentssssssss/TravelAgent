@@ -93,7 +93,7 @@ npm run test
 ## 文档上传与向量索引
 
 - 管理员页面新增文档上传入口（`/admin?key=...`）
-- 支持格式：`PDF`, `DOCX`, `PPTX`
+- 支持格式：`PDF`, `DOCX`, `XLSX/XLS`, `PPTX`
 - 当前版本默认不做图片 OCR，仅抽取文档可读文本层（可通过 `ENABLE_OCR` 开关预留）
 - 每次上传后会自动：
   1. 保存原文件到 `data/uploads/`
